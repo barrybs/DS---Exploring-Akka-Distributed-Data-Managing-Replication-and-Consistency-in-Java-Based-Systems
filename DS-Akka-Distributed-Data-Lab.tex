@@ -1,0 +1,540 @@
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% AMS Beamer series / Bologna FC / Template
+% Andrea Omicini
+% Alma Mater Studiorum - Università di Bologna
+% mailto:andrea.omicini@unibo.it
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\documentclass[presentation,apice]{beamer}\mode<presentation>{\usetheme{AMSBolognaFC}}
+%\documentclass[presentation]{beamer}\mode<presentation>{\usetheme{AMSBolognaFC}}
+%\documentclass[handout]{beamer}\mode<handout>{\usetheme{AMSBolognaFC}}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\usepackage{comment}
+\usepackage{wasysym}
+\usepackage[yyyymmdd]{datetime}
+\renewcommand{\dateseparator}{}
+\def\BibTeX{{\rm B\kern-.05em{\sc i\kern-.025em b}\kern-.08em
+    T\kern-.1667em\lower.7ex\hbox{E}\kern-.125emX}}
+\bibliography{DS-Akka-Distributed-Data-Lab}
+\renewcommand{\thefootnote}{\fnsymbol{footnote}}
+% version
+%\newcommand{\templatemajor}{0}
+%\newcommand{\templateminor}{1}
+%\newcommand{\templatepatch}{20231208}
+%\newcommand{\templateversion}{\templatemajor.\templateminor.\templatepatch}
+\newcommand{\templateversion}{a.a. 2023/2024}
+
+\usepackage{listings}
+\lstset{
+  basicstyle=\ttfamily\tiny,
+  columns=fullflexible,
+  frame=none,
+  breaklines=true,
+  language=Java,  % Indica il linguaggio Java
+  showstringspaces=false
+}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\title[Exploring Akka Distributed Data]
+{Exploring Akka Distributed Data}
+%
+\subtitle[Managing Replication and Consistency in Java-Based Systems]
+{Managing Replication and Consistency in Java-Based Systems}
+%
+\author[\sspeaker{Barry Bassi}]
+{\speaker{Barry Bassi} \href{mailto:barry.bassi@studio.unibo.it}{barry.bassi@studio.unibo.it}}
+%
+\institute[DISI, Univ.\ Bologna]
+{C.D.L. Magistrale in Ingegneria e Scienze Informatiche\\\textsc{Alma Mater Studiorum} -- Universit{\`a} di Bologna, Cesena}
+%
+\date[v.\ \templateversion]{ \templateversion}
+%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{document}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%/////////
+\frame{\titlepage}
+%/////////
+
+%%===============================================================================
+%\section*{Outline}
+%%===============================================================================
+%
+%%/////////
+%\frame[c]{\tableofcontents[hideallsubsections]}
+%%/////////
+
+%===============================================================================
+\section{Outline}
+%===============================================================================
+%/////////
+\begin{frame}[c]{Outline}
+%
+\begin{enumerate}
+	\item Prologue
+        \item Introduction to Akka Cluster
+        \item Replicator and Distributed Data
+	\item Consistency and read/write methods
+\end{enumerate}
+%
+\end{frame}
+%/////////
+\section{Prologue}
+%/////////
+\begin{frame}[c,fragile]{Lab Goals and Contents}
+%
+\begin{block}{\texttt{Main goal}}
+The main goal of the lab is to autonomously learn how to build distributed applications based on Akka Cluster and Distributed Data tecnhologies with a practical approach. 
+\end{block}
+\begin{block}{\texttt{Contents}}
+\begin{itemize}
+\item Akka Cluster: create a simple cluster for a multi-JVM application to manage failures, performances and consistency.
+\item Akka Distributed Data: a powerful technology to manage shared data structures replicated on the cluster nodes with automated conflict management (CRDT).
+\item Consistency management: tuning the consistency level by the configuration of read and write mode (local, majority, strict).
+\end{itemize}
+\end{block}
+\end{frame}
+
+\section{Prologue}
+\begin{frame}[c,fragile]{Lab Goals and Contents}
+\begin{block}{\texttt{Examples}}
+This lab is based on some examples:
+\begin{itemize}
+    \item dd-lab-cluster-1: a simple Akka Cluster implementation to log events of join and leave fired when a node join or exit from the cluster.
+    \item dd-lab-cluster-2: an example of usa of a PNCounter in a cluster. A Positive-Negative Counter is a CRDT shared structure provided by Akka Distributed Data.
+    \item A distributed puzzle game that uses advanced features of Distributed Data like LWWMap, Receptionist and different methods of read and write to manage consistency.
+\end{itemize}
+\end{block}
+\begin{block}{\texttt{GitLab repo}}
+https://dvcs.apice.unibo.it/pika-lab/courses/ds/projects/ds-project-bassi-ay2324
+\end{block}
+
+\end{frame}
+%/////////
+\section{Akka}
+\begin{frame}[c,fragile]{Introduction to Akka}
+\begin{block}{\texttt{Akka}}
+Akka is a JVM based technology available in Scala and Java to build distributed applications with actors.
+The basic version of Akka provides libraries to build applications for nodes running on a single JVM.
+\end{block}
+\end{frame}
+
+\section{Akka Artery}
+\begin{frame}[c,fragile]{Introduction to Akka}
+\begin{block}{\texttt{Akka remote (Artery)}}
+Akka Artery is an extension to build actors that can run in different JVMs and can communicate themselves. 
+This technology nowadays is deprecated and substituted by Akka Cluster.
+The main goal is to implement the location transparency of the actors and send messages with a tell method given the actor reference of the recipient.
+\end{block}
+\end{frame}
+%/////////
+
+%/////////
+\section{Akka}
+\begin{frame}[c,fragile]{Akka and distributes systems}
+\begin{block}{\texttt{Akka in production distributed system}}
+\begin{itemize}
+    \item Peer to peer fashion interaction between actors.
+    \item Location transparency: same API as the local systems.
+    \item Serialization: a mandatory but easy to implement mechanism to send and receive messages across the network.
+    \item Uses TCP or Aeron.
+\end{itemize}
+\end{block}
+
+\begin{block}{\texttt{Akka guarantees for messages}}
+\begin{itemize}
+    \item "At most once" delivery.
+    \item "Exactly once" for system messages (for remote death watch).
+    \item Message ordering between pairs of actors.
+\end{itemize}
+
+\end{block}
+\end{frame}
+%/////////
+\section{Akka Cluster}
+\begin{frame}[c,fragile]{Akka Cluster}
+%
+\begin{block}{\texttt{Introduction to Akka Cluster}}
+Akka Cluster provides a fault-tolerant decentralized peer-to-peer based Cluster Membership Service with no single point of failure or bottleneck.
+It allows for building robust distributed applications where one application or service spans multiple nodes. Every node is an ActorSystem and it can run on a different JVM.
+\end{block}
+
+\end{frame}
+
+\begin{frame}[c,fragile]{Akka Cluster}
+\begin{block}{\texttt{Definitions}}
+\begin{itemize}
+    \item \textbf{ActorSystem}: a hierarchical group of actors wich share common configuration, remote capabilities and addresses.
+    \item \textbf{Node}: member of a cluster identified by \textbf{hostname:port:uid}. It's an ActorSystem and there could be multiple nodes in the same physical machine. Its location is made transparent by the cluster features.
+    \item \textbf{Cluster}: a service to join toghether a set of nodes and to manage membership, failures, consistency and performance.
+\end{itemize}
+\end{block}
+\end{frame}
+%/////////
+
+\begin{comment}
+\begin{frame}[c,fragile]{Akka Cluster}
+%
+\begin{block}{\texttt{Introduction to Akka Cluster}}
+\textbf{\textit{TODO: [Theory] Some slides to introduce Akka Cluster like: node status transitions, gossip protocol and vector clocks, failure detection, seed nodes and stuff like that.}}
+\end{block}
+%
+\end{frame}
+\end{comment}
+%/////////
+
+%/////////
+\section{Akka Cluster implementation}
+\begin{frame}[c,fragile]{First example}
+%
+\begin{block}{\texttt{Example project}}
+\begin{itemize}
+    \item Clone the repo: \textbf{https://dvcs.apice.unibo.it/pika-lab/courses/ds/projects/ds-project-bassi-ay2324}.
+    \item The first example is in \textbf{ddlab-cluster-1} module.
+    \item It's a Gradle project with subprojects: all dependencies for akka and akka cluster are defined into the \textbf{build.gradle.kts} of the main project.
+\end{itemize}
+\end{block}
+%
+\end{frame}
+%/////////
+
+\begin{frame}[c,fragile]{Cluster basic configuration}
+%
+\begin{block}{\texttt{Basic configuration}}
+The first step to implement a cluster is application.conf configuration file in the resource folder of the project.
+\begin{lstlisting}
+akka {
+  loglevel = OFF
+  actor {
+    provider = cluster
+    allow-java-serialization = on
+  }
+  remote {
+    artery {
+      transport = tcp
+      canonical.hostname = "127.0.0.1"
+      canonical.port = 0
+    }
+  }
+  cluster {
+    seed-nodes = [
+      "akka://ClusterSystem@127.0.0.1:25251",
+      "akka://ClusterSystem@127.0.0.1:25252"]
+    downing-provider-class = "akka.cluster.sbr.SplitBrainResolverProvider"
+  }
+}
+\end{lstlisting}
+\end{block}
+\end{frame}
+
+\begin{frame}{Cluster basic configuration}    
+\begin{block}{\texttt{application.conf}}
+This configuration is very simple and suitable for an educational example.
+\begin{itemize}
+\item \textbf{allow-java-serialization}: slower but in this educational environment ensures compatibility. In a real world application you can configure jackson-cbor or other serializers.
+\item \textbf{remote artery settings}: indicates the transport protocol and hostname and port of the machine you want to run the cluster ActorSystem on. Canonical port 0 means automatic port choice.
+\item \textbf{cluster configuration}: in this example we have 2 seed nodes. These nodes are the first to be contacted when a new node (ActorSystem) is created and wants to join the cluster. The SplitBrainResolverProvider is an Akka component that handles communication problems due to partitioning.
+\end{itemize}
+\end{block}
+%
+\end{frame}
+%/////////
+\begin{frame}{Basic cluster example}    
+\begin{block}{\texttt{ddlab-cluster-1}}
+In this example a cluster with 2 nodes is created. Every node has an actor which listen to cluster events: 
+\begin{itemize}
+    \item MemberJoin: a node joined the cluster.
+    \item MemberLeft: a node left the cluster by a graceful shutdown.
+\end{itemize}
+When the nodes receives an event (a message) it writes a log.
+\end{block}
+%
+\end{frame}
+
+%/////////
+\begin{frame}{Basic cluster example}    
+\begin{block}{\texttt{Main class}}
+Main.java provide three methods to create cluster, nodes, actors, and to start the application: 
+\begin{itemize}
+    \item main: starts two nodes by the \textbf{startup} method.
+    \item startup: loads the application.conf file and starts a node (ActorSystem)
+    \item rootBehavior: creates a ClusterEventActor actor.
+\end{itemize}
+In other words, the ClusterEventActor is a member of an ActorSystem (a node).
+\end{block}
+%
+\end{frame}
+
+%/////////
+\begin{frame}[c,fragile]{Basic cluster example}    
+
+\begin{block}{\texttt{ClusterEventActor}}
+This class represents an \textbf{actor} created by an ActorSystem (a node). 
+In the constructor we can find the following ling that decorates an ActorSystem with the Cluster.
+The cluster will actually be created only once even if the constructor-decorator will be invoked 2 times in this case.
+\begin{lstlisting}
+Cluster cluster = Cluster.get(getContext().getSystem());
+\end{lstlisting}
+Now we have \textbf{1 cluster}, \textbf{2 nodes} (ActorSystem) and \textbf{2 actors}.
+\end{block}
+%
+\end{frame}
+%/////////
+
+%/////////
+\begin{frame}[c,fragile]{Basic cluster example}    
+\begin{block}{\texttt{ClusterEventActor methods}}
+\begin{itemize}
+    \item create(): a factory method to create the actor. In this case the actor is created with the ability to schedule timed messages so it can "plan" to sent a LeaveCluster message after n minutes to leave it gracefully. 
+    \item createReceive(): the AbstractBehaviour method to manage the messages types received from other actors or sent by itself by invoking a specific method.
+    \item onMemberJoined(), onMemberLeft() and onLeaveCluster(): methods called when the corresponding events are fired.
+\end{itemize}
+\end{block}
+%
+\end{frame}
+%/////////
+
+%/////////
+\begin{frame}[c,fragile]{Basic cluster example}
+
+\begin{block}{\texttt{Program log}}
+Running the application and watching the log, we can see the events notified to the two nodes.
+The MemberLeft event was logged 4 times because in this case each node is notified by the cluster of events (2+2 "left" event notifications). 
+\begin{lstlisting}
+gen 22, 2024 3:00:39 PM it.unibo.ClusterEventActor onMemberJoined
+INFO: Member joined: Member(akka://ClusterSystem@127.0.0.1:25252, Joining)
+gen 22, 2024 3:00:39 PM it.unibo.ClusterEventActor onMemberJoined
+INFO: Member joined: Member(akka://ClusterSystem@127.0.0.1:25252, Joining)
+gen 22, 2024 3:00:44 PM it.unibo.ClusterEventActor onMemberLeft
+INFO: Member left: Member(akka://ClusterSystem@127.0.0.1:25251, Leaving)
+gen 22, 2024 3:00:44 PM it.unibo.ClusterEventActor onMemberLeft
+INFO: Member left: Member(akka://ClusterSystem@127.0.0.1:25251, Leaving)
+gen 22, 2024 3:00:44 PM it.unibo.ClusterEventActor onMemberLeft
+INFO: Member left: Member(akka://ClusterSystem@127.0.0.1:25252, Leaving)
+gen 22, 2024 3:00:44 PM it.unibo.ClusterEventActor onMemberLeft
+INFO: Member left: Member(akka://ClusterSystem@127.0.0.1:25252, Leaving)
+\end{lstlisting}
+
+\end{block}
+%
+\end{frame}
+%/////////
+%/////////
+\begin{frame}[c,fragile]{Exercise 1}
+
+\begin{block}{\texttt{Create an Akka Cluster application}}
+Create an Akka Cluster application, or modify the one provided in the example, such that 2 actors are created for each node. Moreover, when any actor reaches the 'Removed' state, the entire node (ActorSystem) to which that actor belongs must be gracefully terminated.
+\end{block}
+%
+\end{frame}
+%/////////
+
+%/////////
+\begin{frame}[c,fragile]{Akka Distributed Data}
+
+\begin{block}{\texttt{Introduction}}
+Distributed Data is a library to manage shared data between nodes in Akka Cluster.
+All data entries spread to nodes in the cluster via direct replication or gossip dissemination. 
+As we'll see in the next section, with Distributed Data you can fine-tune the consistency level for reads and writes with CRDT structures provided by the library. \\
+It is \textbf{eventually consistent} and provides high read and write availability with low latency. Due to eventually consistency, the values read at a given moment may not be the most updated ones.
+\end{block}
+%
+\end{frame}
+%/////////
+
+\begin{frame}{Replicator}
+\begin{block}{\texttt{Using the Replicator}}
+Replicator is the actor that interact with to manage the shared data through specific messages such as \textbf{Replicator.Update}. These messages are all subclasses of Replicator.Command.\\
+\textbf{akka.cluster.ddata} package provides many CRDTs (counters, maps, etc).
+\end{block}
+\begin{block}{\texttt{A key-value store like API}}
+Data can be accessed with key-value pairs, where the key is a unique identifier with type information of the data values, and the values are CRDTs (Conflict Free Data Types).
+
+\end{block}
+\end{frame}
+
+\begin{frame}[c,fragile]{Akka Distributed Data}
+\begin{block}{\texttt{Example 2 - A simple PNCounter}}
+This project wraps an example of a Positive-Negative Counter CRDT provided in the Akka Documentation.
+Module in the repository: \textbf{ddlab-cluster-2} module.
+\begin{lstlisting}
+public class Main {
+    public static void main(String[] args) {
+        startup(25251);
+    }
+    private static Behavior<Void> rootBehavior() {
+        return Behaviors.setup(context -> {
+            final SelfUniqueAddress node = DistributedData.get(context.getSystem()).selfUniqueAddress();
+            final PNCounter c0 = PNCounter.create();
+            final PNCounter c1 = c0.increment(node, 1);
+            final PNCounter c2 = c1.increment(node, 7);
+            final PNCounter c3 = c2.decrement(node, 2);
+            System.out.println(c3.value()); // 6
+            return Behaviors.empty();
+        });
+    }
+    private static void startup(int port) {
+        Map<String, Object> overrides = new HashMap<>();
+        overrides.put("akka.remote.artery.canonical.port", port);
+        ActorSystem<Void> system = ActorSystem.create(rootBehavior(), "ClusterSystem", ConfigFactory.parseMap(overrides).withFallback(ConfigFactory.load()));
+    }
+}
+\end{lstlisting}
+
+\end{block}
+%
+\end{frame}
+
+\begin{frame}[c,fragile]{Akka Distributed Data}
+\begin{block}{\texttt{Example 2 - A simple PNCounter}}
+This app provides a cluster that is the same as the one in the first example.
+Here we have only 1 actor: the \textbf{root Behaviour} (in Akka Typed a Behavior is the same thing as an actor). \\
+The \textbf{node} identifier represents the root node in the cluster.
+The cluster is defined in application.conf, so we don't need to explictly instantiate the Cluster in the Java code. \\
+The increment and decrement method changes the counter value asynchronously. The final result is 6.\\
+In this example we can use a \textbf{CRDT} like PNCounter like any other immutable data structure but on a node of the cluster. So we can create multiple nodes each with a PNCounter by simply invoking startup and they will run independently.
+\end{block}
+%
+\end{frame}
+
+\begin{frame}[c,fragile]{Akka Distributed Data}
+\begin{block}{\texttt{Example 3 - A GCounter with Replicator}}
+A more realistic example is the one in the ddlab-cluster-3 module in the repo.
+In this case we have a Counter class that extends AbstractBehaviour.
+This class manages a GCounter (a growing-only counter).\\
+The read and write operations are managed by the Replicator.
+The following is the method onIncrement executed when a Increment message is received by the Counter.
+\begin{lstlisting}
+    private Behavior<Command> onIncrement(Increment cmd) {
+        replicatorAdapter.askUpdate(
+                askReplyTo ->
+                        new Replicator.Update<>(
+                                key,
+                                GCounter.empty(),
+                                Replicator.writeLocal(),
+                                askReplyTo,
+                                curr -> curr.increment(node, 1)),
+                InternalUpdateResponse::new);
+
+        return this;
+    }    
+\end{lstlisting}
+    
+\end{block}
+%
+\end{frame}
+
+\begin{frame}[c,fragile]{Akka Distributed Data}
+\begin{block}{\texttt{Example 3 - A GCounter with Replicator}}
+In the provided code snippet, the GCounter's value is augmented using the increment method, which requires a node reference. This updated state is then committed locally through the Replicator.writeLocal() method. The \textbf{Replicator}, serving as a specialized actor, offers various read and write functionalities to achieve the specified consistency level. \\Specifically, the \textbf{writeLocal} function commits data to the GCounter's local replica at the node. This updated state is then promptly propagated to other nodes within the cluster through a gossip dissemination mechanism. Here's some advantages in writing a dedicated class that uses Replicator:
+\begin{enumerate}
+    \item More agile testing for the database solution implemented.
+    \item Fine tuning consistency level by changing the read and/or write mode.
+    \item Performance improvement by test different read/write methods and read caching.
+\end{enumerate}
+\end{block}
+%
+\end{frame}
+\begin{frame}[c,fragile]{Akka Distributed Data}
+\begin{block}{\texttt{Exercise 2}}
+Write an Akka Cluster application, or extend the Example 3, to create a cluster with 1 node for a shared GCounter management, and 10 nodes each with 1 actor. The "Incrementer" actors would increment by 1 the counter, get the counter value by specific messages and logging it.
+\end{block}
+%
+\end{frame}
+
+\begin{frame}[c,fragile]{Akka DD and Consistency Management}
+\begin{block}{\texttt{Read and Write methods}}
+Akka Replicator provides various read and write methods to manage the consistency level. The most important \textbf{read} methods are:
+\begin{itemize}
+    \item \textbf{ReadLocal}: reads the value only from the local replica.
+    \item \textbf{ReadMajority}: reads and merges the value from at least N/2+1 nodes, where N is the number of nodes in the cluster (or cluster role group).
+    \item \textbf{ReadAll}: reads and merges the value from all the nodes in the cluster (or all nodes in a cluster role group) except the exiting nodes.
+\end{itemize}
+The \textbf{write} methods are very similar. 
+Several variants are available: Read/WriteMajority plus, minCap for Read/WriteAll, etc.
+\end{block}
+\end{frame}
+
+\begin{frame}[c,fragile]{Akka DD and Consistency Management}
+\begin{block}{\texttt{Read methods}}
+Akka Replicator provides various read and write methods to manage the consistency level. The most important \textbf{read} methods are:
+\begin{itemize}
+    \item ReadLocal: reads the value only from the local replica (no GetFailure is possible).
+    \item ReadMajority: reads and merges the value from at least N/2+1 nodes, where N is the number of nodes in the cluster (or cluster role group).
+    \item ReadAll: reads and merges the value from all the nodes in the cluster (or all nodes in a cluster role group) except the exiting nodes.
+\end{itemize}
+The \textbf{write} methods are very similar. 
+\end{block}
+\end{frame}
+
+\begin{frame}[c,fragile]{Akka DD and Consistency Management}
+\begin{block}{\texttt{Write methods}}
+To complete this overwiew, the writing methods also reported.
+\begin{itemize}
+    \item WriteLocal: writes the value immediately on the local replica. The value will be later disseminated with gossip. UpdateFailure is possibile due to an exception.
+    \item WriteMajority: writes the value immediately to at least N/2+1 replicas, where N is the number of nodes in the cluster (or cluster role group).
+    \item WriteAll: writes immediatly on all the nodes of the cluster (or all nodes in a cluster role group) except the exiting nodes.
+\end{itemize}
+\end{block}
+\end{frame}
+
+\begin{frame}[c,fragile]{Akka DD and Consistency Management}
+\begin{block}{\texttt{Write consistency }}
+To complete this overwiew, the writing methods also reported.
+\begin{itemize}
+    \item WriteLocal: writes the value immediately on the local replica. The value will be later disseminated with gossip. UpdateFailure is possibile due to an exception.
+    \item WriteMajority: writes the value immediately to at least N/2+1 replicas, where N is the number of nodes in the cluster (or cluster role group).
+    \item WriteAll: writes immediatly on all the nodes of the cluster (or all nodes in a cluster role group) except the exiting nodes.
+\end{itemize}
+\end{block}
+Akka provides other methods: Read/WriteMajority plus, Read/WriteAll with a minimun cap of nodes (minCap param), etc.
+\end{frame}
+
+\begin{frame}[c,fragile]{Advanced Akka Distributed Data}
+\begin{block}{\texttt{A complete example}}
+A complete example is provided in the repo module ddlab-cluster-puzzle. Here's how it works:
+\begin{itemize}
+    \item The game starts with puzzle gui with shuffled tiles available to a distributed player (peer-to-peer).
+    \item A player can swap the pieces of the puzzle via the gui.
+    \item The pieces positions are propagated by the Replicator to all nodes via gossip dissemination.
+    \item Concurrent writes of the same pieces are managed by the LWWMap (last-write-wins) so a player swap could see its swap fail.
+    \item The LWWMap, in the case of writing conflics (e.g. same pieces swapped) lets the last player who sent the write message to effectively write the swap.
+\end{itemize}
+\end{block}
+\end{frame}
+
+\begin{frame}[c,fragile]{Advanced Akka Distributed Data}
+\begin{block}{\texttt{Distributed Puzzle technicalities - part 1}}
+A complete example is provided in the repo module ddlab-cluster-puzzle. Here's how it works:
+\begin{itemize}
+    \item The RootBehaviour creates a cluster with 2 different kind of nodes: 1 has the role "distributeddata", n nodes has the role "playerwithgui".
+    \item The "distributeddata" node manage a LWWMap (Last-Write-Wins CRDT map) by a Replicator actor.
+    \item The "playerwithgui" node represents a player with a swing gui that send messages to a PlayerActor. This actor reads locally the positions of the tiles of the puzzle using the Replicator (a message with ReadLocal method) and writes the swapped pieces by Replicator WriteMajority method.
+    \item The LWWMap, in the case of writing conflics (e.g. same pieces swapped) lets the last player who sent the write message to effectively write the swap.
+\end{itemize}
+\end{block}
+\end{frame}
+
+\begin{frame}[c,fragile]{Advanced Akka Distributed Data}
+\begin{block}{\texttt{Distributed Puzzle technicalities - part 2}}
+\begin{itemize}
+    \item If a PlayerActor node fails, the cluster will not restart it.
+    \item If a "distributeddata" node fails, the cluster detects it by the Phi Accrual Failure Detector and manage it by the replicas with the aim to obtain the eventual consistency provided by Akka Cluster.
+    \item When all the players are exited, after 20 seconds, with no PlayerActors in the cluster the "distributeddata" node will be terminated.
+    \item This distributed puzzle is just an educational example. In a real world game, responsiveness, conflict management and data consistency should be optimized.
+\end{itemize}
+\end{block}
+\end{frame}
+
+\begin{frame}[c,fragile]{Advanced Akka Distributed Data}
+\begin{block}{\texttt{Excercise 3}}
+The PuzzleLWWMap actor of the distributed puzzle game manages the consistency by Replicator.ReadLocal to provide the pieces positions to PlayerActors and by Replicator.WriteMajority to manage the swap of the pieces requested by a PlayerActor.
+\\
+\begin{enumerate}
+    \item Test the consistency level and the gui responsivity with at least 2 players and different read and write method combinations (ReadLocal, ReadMajority, ReadAll, WriteLocal, WriteMajority, WriteAll).
+    \item In PuzzleLWWMap a GetCachedMapMsg is available. It provides a cached copy of the puzzle pieces maintained automatically by the Replicator.Changed event fired by the LWWMap when the piece positions change.
+Test it in various configurations of read/write methods to evaluate performance and consistency.
+\end{enumerate}
+\end{block}
+\end{frame}
+\end{document}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
